@@ -9,6 +9,7 @@
 
 
 void run_all(int *atm, int natm, int *bas, int nbas, double *env);
+void run_1e(int *atm, int natm, int *bas, int nbas, double *env);
 
 int cint2e_ip1_sph(double *buf, int *shls,
                    int *atm, int natm, int *bas, int nbas, double *env,
@@ -16,6 +17,9 @@ int cint2e_ip1_sph(double *buf, int *shls,
 void cint2e_ip1_sph_optimizer(CINTOpt **opt, int *atm, int natm,
                               int *bas, int nbas, double *env);
 
+void cint1e_ovlp_sph(double *buf, int *shls, int *atm, int natm,
+                     int *bas, int nbas, double *env);
+                    
 int main()
 {
         int natm = 8;
@@ -114,6 +118,7 @@ int main()
         nbas = n;
         printf("6-31G basis\n");
         run_all(atm, natm, bas, nbas, env);
+        run_1e(atm, natm, bas, nbas, env);
 
         // 6-311G**
         env[off+ 0] = 4563.240; env[off+17] = 0.0019666*CINTgto_norm(0,env[off+ 0]);
@@ -232,6 +237,7 @@ int main()
         nbas = n;
         printf("6-311G(dp) basis\n");
         run_all(atm, natm, bas, nbas, env);
+        run_1e(atm, natm, bas, nbas, env);
 
         // cc-pVDZ, C
         env[off+ 0] = 6665.0; env[off+ 8]=0.000692*CINTgto_norm(0,env[off+ 0]); env[off+16]=-0.000146*CINTgto_norm(0,env[off+0]);
@@ -319,6 +325,7 @@ int main()
         nbas = n;
         printf("cc-pVDZ basis\n");
         run_all(atm, natm, bas, nbas, env);
+        run_1e(atm, natm, bas, nbas, env);
 
         // cc-pVTZ
         env[off+ 0] = 8236.0; env[off+18]= 0.000531*CINTgto_norm(0,env[off+ 0]); env[off+26]=-0.000113*CINTgto_norm(0,env[off+ 0]);
@@ -461,6 +468,7 @@ int main()
         nbas = n;
         printf("cc-pVTZ basis\n");
         run_all(atm, natm, bas, nbas, env);
+        run_1e(atm, natm, bas, nbas, env);
 
         env[off+ 0] = 33980.; env[off+24]= 0.000091*CINTgto_norm(0,env[off+ 0]); env[off+33]= -0.000019*CINTgto_norm(0,env[off+0]);
         env[off+ 1] = 5089.0; env[off+25]= 0.000704*CINTgto_norm(0,env[off+ 1]); env[off+34]= -0.000151*CINTgto_norm(0,env[off+1]);
@@ -675,6 +683,7 @@ int main()
         nbas = n;
         printf("cc-pVQZ basis\n");
         run_all(atm, natm, bas, nbas, env);
+        run_1e(atm, natm, bas, nbas, env);
 
         free(atm);
         free(bas);
@@ -840,3 +849,61 @@ void run_all(int *atm, int natm, int *bas, int nbas, double *env)
         free(jshls);
 }
 
+void run_1e(int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int i, j, ij;
+        int di, dj;
+        int shls[2];
+        double *buf;
+        int *ishls = malloc(sizeof(int)*nbas*nbas);
+        int *jshls = malloc(sizeof(int)*nbas*nbas);
+        for (i = 0, ij = 0; i < nbas; i++) {
+                for (j = 0; j <= i; j++, ij++) {
+                        ishls[ij] = i;
+                        jshls[ij] = j;
+                }
+        }
+
+        int ncgto = CINTtot_cgto_spheric(bas, nbas);
+        printf("\tshells = %d, total cGTO = %d, total pGTO = %d\n",
+               nbas, ncgto,
+               CINTtot_pgto_spheric(bas, nbas));
+
+        int pct, count;
+        double time0, time1 = 0;
+        double tt, tot;
+        tot = (double)ncgto*ncgto/2;
+        time0 = omp_get_wtime();
+
+        printf("\tint1e_ovlp_sph: total num ERI = %.2e\n", tot);
+        pct = 0; count = 0;
+#pragma omp parallel default(none) \
+        shared(atm, natm, bas, nbas, env, ishls, jshls, time0, pct, count, stdout) \
+        private(di, dj, i, j, ij, shls, buf, time1)
+#pragma omp for nowait schedule(dynamic, 2)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                i = ishls[ij];
+                j = jshls[ij];
+                di = CINTcgto_spheric(i, bas);
+                dj = CINTcgto_spheric(j, bas);
+                // when ksh==ish, there exists k<i, so it's possible kl>ij
+                shls[0] = i;
+                shls[1] = j;
+                buf = malloc(sizeof(double) * di*dj);
+                cint1e_ovlp_sph(buf, shls, atm, natm, bas, nbas, env);
+                free(buf);
+                if (100*count/((long)nbas*(nbas+1)/2) > pct) {
+                        pct++;
+                        time1 = omp_get_wtime();
+                        printf("\t%d%%, CPU time = %8.2f\r", pct, time1-time0);
+                        fflush(stdout);
+                }
+        }
+        time1 = omp_get_wtime();
+        tt = time1-time0;
+        printf("\t100%%, CPU time = %8.2f, %8.4f Mflops\n",
+               tt, tot/1e6/tt);
+
+        free(ishls);
+        free(jshls);
+}
