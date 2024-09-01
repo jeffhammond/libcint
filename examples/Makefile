@@ -2,7 +2,7 @@ CC = gcc-14
 OPENMP = -fopenmp
 
 CPPFLAGS = -I../include
-LDFLAGS = $(OPENMP) -L..
+LDFLAGS = $(OPENMP) -L.. -Wl,-rpath,..
 LIBS = -lcint
 
 CFLAGS = $(CPPFLAGS) $(OPENMP) -g -O3
