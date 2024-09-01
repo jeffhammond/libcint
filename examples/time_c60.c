@@ -7,7 +7,17 @@
 #include "cint.h"
 
 void run_all(int *atm, int natm, int *bas, int nbas, double *env);
+void run_ovl(int *atm, int natm, int *bas, int nbas, double *env);
 
+int cint2e_ip1_sph(double *buf, int *shls,
+                   int *atm, int natm, int *bas, int nbas, double *env,
+                   CINTOpt *opt);
+void cint2e_ip1_sph_optimizer(CINTOpt **opt, int *atm, int natm,
+                              int *bas, int nbas, double *env);
+
+void cint1e_ovlp_sph(double *buf, int *shls, int *atm, int natm,
+                     int *bas, int nbas, double *env);
+                    
 int main()
 {
         int natm = 60;
@@ -153,6 +163,7 @@ int main()
         }
         nbas = n;
 
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
         // 6478s on one core of 3.1G I5 CPU
         free(atm);
@@ -234,3 +245,61 @@ void run_all(int *atm, int natm, int *bas, int nbas, double *env)
         free(jshls);
 }
 
+void run_ovl(int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int i, j, ij;
+        int di, dj;
+        int shls[2];
+        double *buf;
+        int *ishls = malloc(sizeof(int)*nbas*nbas);
+        int *jshls = malloc(sizeof(int)*nbas*nbas);
+        for (i = 0, ij = 0; i < nbas; i++) {
+                for (j = 0; j <= i; j++, ij++) {
+                        ishls[ij] = i;
+                        jshls[ij] = j;
+                }
+        }
+
+        int ncgto = CINTtot_cgto_spheric(bas, nbas);
+        printf("\tshells = %d, total cGTO = %d, total pGTO = %d\n",
+               nbas, ncgto,
+               CINTtot_pgto_spheric(bas, nbas));
+
+        int pct, count;
+        double time0, time1 = 0;
+        double tt, tot;
+        tot = (double)ncgto*ncgto/2;
+        time0 = omp_get_wtime();
+
+        printf("\tint1e_ovlp_sph: total num ERI = %.2e\n", tot);
+        pct = 0; count = 0;
+#pragma omp parallel default(none) \
+        shared(atm, natm, bas, nbas, env, ishls, jshls, time0, pct, count, stdout) \
+        private(di, dj, i, j, ij, shls, buf, time1)
+#pragma omp for nowait schedule(dynamic, 2)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                i = ishls[ij];
+                j = jshls[ij];
+                di = CINTcgto_spheric(i, bas);
+                dj = CINTcgto_spheric(j, bas);
+                // when ksh==ish, there exists k<i, so it's possible kl>ij
+                shls[0] = i;
+                shls[1] = j;
+                buf = malloc(sizeof(double) * di*dj);
+                cint1e_ovlp_sph(buf, shls, atm, natm, bas, nbas, env);
+                free(buf);
+                if (100*count/((long)nbas*(nbas+1)/2) > pct) {
+                        pct++;
+                        time1 = omp_get_wtime();
+                        printf("\t%d%%, CPU time = %8.2f\r", pct, time1-time0);
+                        fflush(stdout);
+                }
+        }
+        time1 = omp_get_wtime();
+        tt = time1-time0;
+        printf("\t100%%, CPU time = %12.6f, %8.4f Mflops\n",
+               tt, tot/1e6/tt);
+
+        free(ishls);
+        free(jshls);
+}

@@ -9,7 +9,7 @@
 
 
 void run_all(int *atm, int natm, int *bas, int nbas, double *env);
-void run_1e(int *atm, int natm, int *bas, int nbas, double *env);
+void run_ovl(int *atm, int natm, int *bas, int nbas, double *env);
 
 int cint2e_ip1_sph(double *buf, int *shls,
                    int *atm, int natm, int *bas, int nbas, double *env,
@@ -117,8 +117,8 @@ int main()
         }
         nbas = n;
         printf("6-31G basis\n");
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
-        run_1e(atm, natm, bas, nbas, env);
 
         // 6-311G**
         env[off+ 0] = 4563.240; env[off+17] = 0.0019666*CINTgto_norm(0,env[off+ 0]);
@@ -236,8 +236,8 @@ int main()
         }
         nbas = n;
         printf("6-311G(dp) basis\n");
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
-        run_1e(atm, natm, bas, nbas, env);
 
         // cc-pVDZ, C
         env[off+ 0] = 6665.0; env[off+ 8]=0.000692*CINTgto_norm(0,env[off+ 0]); env[off+16]=-0.000146*CINTgto_norm(0,env[off+0]);
@@ -324,8 +324,8 @@ int main()
         }
         nbas = n;
         printf("cc-pVDZ basis\n");
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
-        run_1e(atm, natm, bas, nbas, env);
 
         // cc-pVTZ
         env[off+ 0] = 8236.0; env[off+18]= 0.000531*CINTgto_norm(0,env[off+ 0]); env[off+26]=-0.000113*CINTgto_norm(0,env[off+ 0]);
@@ -467,8 +467,8 @@ int main()
         }
         nbas = n;
         printf("cc-pVTZ basis\n");
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
-        run_1e(atm, natm, bas, nbas, env);
 
         env[off+ 0] = 33980.; env[off+24]= 0.000091*CINTgto_norm(0,env[off+ 0]); env[off+33]= -0.000019*CINTgto_norm(0,env[off+0]);
         env[off+ 1] = 5089.0; env[off+25]= 0.000704*CINTgto_norm(0,env[off+ 1]); env[off+34]= -0.000151*CINTgto_norm(0,env[off+1]);
@@ -682,8 +682,8 @@ int main()
         }
         nbas = n;
         printf("cc-pVQZ basis\n");
+        run_ovl(atm, natm, bas, nbas, env);
         run_all(atm, natm, bas, nbas, env);
-        run_1e(atm, natm, bas, nbas, env);
 
         free(atm);
         free(bas);
@@ -849,7 +849,7 @@ void run_all(int *atm, int natm, int *bas, int nbas, double *env)
         free(jshls);
 }
 
-void run_1e(int *atm, int natm, int *bas, int nbas, double *env)
+void run_ovl(int *atm, int natm, int *bas, int nbas, double *env)
 {
         int i, j, ij;
         int di, dj;
@@ -901,7 +901,7 @@ void run_1e(int *atm, int natm, int *bas, int nbas, double *env)
         }
         time1 = omp_get_wtime();
         tt = time1-time0;
-        printf("\t100%%, CPU time = %8.2f, %8.4f Mflops\n",
+        printf("\t100%%, CPU time = %12.6f, %8.4f Mflops\n",
                tt, tot/1e6/tt);
 
         free(ishls);
